@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "n-log-forge"
+version = "0.1.0"
+description = "Cooperative structured Python logging with operation timing and optional isolated Sentry delivery"
+readme = "README.md"
+requires-python = ">=3.10,<3.15"
+license = "MIT"
+license-files = ["LICENSE"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+sentry = ["sentry-sdk>=2.69.1,<3"]
+dev = ["build>=1.2,<2", "pytest>=8,<10", "pytest-cov>=5,<8", "ruff>=0.12,<1", "mypy>=1.15,<2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["n_log_forge", "core"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/n_log_forge", "/core", "/test", "/example", "/raw", "/README.md", "/LICENSE", "/pyproject.toml", "/.github"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["n_log_forge", "core"]
+strict = true
