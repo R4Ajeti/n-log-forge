@@ -16,6 +16,7 @@ from core.helper.event import Event, thaw
 
 if TYPE_CHECKING:
     from sentry_sdk import Client
+    from sentry_sdk.types import Event as SentryEvent
 
 
 def _sentry_level(level: int) -> str:
@@ -75,13 +76,25 @@ class SentryProvider:
         self._dropped_events = 0
         self._reported_drops = 0
         self._closed = False
+        failure: type[ImportError] | type[ValueError] | None = None
         try:
-            self._client = self._create_client(dsn, environment, release)
+            client = self._create_client(dsn, environment, release)
         except ImportError:
-            raise ImportError(key.SENTRY_MISSING_DEPENDENCY_ERROR_STR) from None
+            failure = ImportError
         except Exception:
-            # SDK errors can include credentials; suppress their entire chain.
-            raise ValueError(key.SENTRY_CONFIGURATION_ERROR_STR) from None
+            failure = ValueError
+        else:
+            self._client = client
+            return
+
+        # Raise after leaving the handler so Python does not retain the SDK
+        # exception as ``__context__``. Its message and traceback may contain the
+        # DSN. Replace the parameter too, keeping the sanitized traceback frame
+        # from retaining the credential-bearing string.
+        dsn = key.SENTRY_REDACTED_DSN_STR
+        if failure is ImportError:
+            raise ImportError(key.SENTRY_MISSING_DEPENDENCY_ERROR_STR) from None
+        raise ValueError(key.SENTRY_CONFIGURATION_ERROR_STR) from None
 
     def _create_client(self, dsn: str, environment: str | None, release: str | None) -> Client:
         from sentry_sdk import Client
@@ -96,51 +109,65 @@ class SentryProvider:
         # SENTRY_PRINT_ENVELOPES unconditionally wraps even explicit transports
         # in SDK 2.69.1. A transportless client followed by direct installation
         # avoids that path without mutating the environment or SDK globals.
-        client = Client(
-            dsn=key.SENTRY_DISABLED_DSN_STR,
-            transport=None,
-            environment=environment or key.SENTRY_FALLBACK_ENVIRONMENT_STR,
-            # Prevent re-reading SENTRY_RELEASE or running Git on unrelated
-            # reconfiguration: the runtime owns the environment snapshot.
-            release=release or key.SENTRY_ABSENT_RELEASE_STR,
-            server_name=key.SENTRY_DEFAULT_SERVER_NAME_STR,
-            dist=key.SENTRY_DEFAULT_DIST_STR,
-            default_integrations=False,
-            auto_enabling_integrations=False,
-            integrations=[],
-            auto_session_tracking=False,
-            enable_logs=False,
-            enable_metrics=False,
-            send_client_reports=False,
-            enable_backpressure_handling=False,
-            debug=False,
-            include_local_variables=False,
-            include_source_context=False,
-            attach_stacktrace=False,
-            send_default_pii=False,
-            traces_sample_rate=None,
-            traces_sampler=None,
-            profiles_sample_rate=None,
-            profiles_sampler=None,
-            profile_session_sample_rate=0.0,
-            propagate_traces=False,
-            trace_propagation_targets=[],
-            functions_to_trace=[],
-            enable_db_query_source=False,
-            enable_http_request_source=False,
-            spotlight=False,
-            keep_alive=False,
-            transport_queue_size=key.SENTRY_QUEUE_CAPACITY_INT,
-            sample_rate=key.SENTRY_ERROR_SAMPLE_RATE_FLOAT,
-            shutdown_timeout=key.SENTRY_ZERO_TIMEOUT_SECONDS_FLOAT,
-        )
-        client.options[key.SENTRY_DSN_KEY_STR] = dsn
-        client.transport = CountedHttpTransport(client.options)
+        client: Client | None = None
+        try:
+            client = Client(
+                dsn=key.SENTRY_DISABLED_DSN_STR,
+                transport=None,
+                environment=environment or key.SENTRY_FALLBACK_ENVIRONMENT_STR,
+                # Prevent re-reading SENTRY_RELEASE or running Git on unrelated
+                # reconfiguration: the runtime owns the environment snapshot.
+                release=release or key.SENTRY_ABSENT_RELEASE_STR,
+                server_name=key.SENTRY_DEFAULT_SERVER_NAME_STR,
+                dist=key.SENTRY_DEFAULT_DIST_STR,
+                default_integrations=False,
+                auto_enabling_integrations=False,
+                integrations=[],
+                auto_session_tracking=False,
+                enable_logs=False,
+                enable_metrics=False,
+                send_client_reports=False,
+                enable_backpressure_handling=False,
+                debug=False,
+                include_local_variables=False,
+                include_source_context=False,
+                attach_stacktrace=False,
+                send_default_pii=False,
+                traces_sample_rate=None,
+                traces_sampler=None,
+                profiles_sample_rate=None,
+                profiles_sampler=None,
+                profile_session_sample_rate=0.0,
+                propagate_traces=False,
+                trace_propagation_targets=[],
+                functions_to_trace=[],
+                enable_db_query_source=False,
+                enable_http_request_source=False,
+                spotlight=False,
+                keep_alive=False,
+                transport_queue_size=key.SENTRY_QUEUE_CAPACITY_INT,
+                sample_rate=key.SENTRY_ERROR_SAMPLE_RATE_FLOAT,
+                shutdown_timeout=key.SENTRY_ZERO_TIMEOUT_SECONDS_FLOAT,
+            )
+            client.options[key.SENTRY_DSN_KEY_STR] = dsn
+            client.transport = CountedHttpTransport(client.options)
+        except Exception:
+            # A failure after Client construction must not strand its components.
+            # Preserve the original setup error; the outer constructor sanitizes
+            # its complete chain before exposing a package configuration error.
+            if client is not None:
+                try:
+                    client.close(timeout=key.SENTRY_ZERO_TIMEOUT_SECONDS_FLOAT)
+                except Exception:
+                    pass
+            raise
         return client
 
     def _record_drop(self) -> None:
         with self._counter_lock:
-            self._dropped_events += 1
+            self._dropped_events = min(
+                self._dropped_events + 1, key.SENTRY_DROP_COUNTER_MAX_INT
+            )
 
     @property
     def dropped_events(self) -> int:
@@ -153,7 +180,8 @@ class SentryProvider:
             return
         # No exception objects or hints reach the asynchronous transport. The
         # runtime isolates ordinary errors, including SDK serialization errors.
-        if self._client.capture_event(_payload(event), scope=None) is None:
+        payload = cast("SentryEvent", _payload(event))
+        if self._client.capture_event(payload, scope=None) is None:
             self._record_drop()
 
     def _has_pending_work(self) -> bool:

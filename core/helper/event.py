@@ -7,9 +7,9 @@ import math
 import traceback
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import MappingProxyType, TracebackType
-from typing import Any, Union
+from typing import Any
 
 from ..constant.event_constant import (
     EXCEPTION_FRAMES_KEY_STR,
@@ -26,12 +26,15 @@ from ..constant.event_constant import (
     FRAME_LINENO_KEY_STR,
     INTERNAL_PREFIX_STR,
     METADATA_CYCLE_STR,
+    METADATA_INTEGER_TOO_LARGE_STR,
     METADATA_MAX_DEPTH_INT,
     METADATA_MAX_DEPTH_STR,
+    METADATA_MAX_INTEGER_BITS_INT,
     METADATA_MAX_ITEMS_INT,
     METADATA_MAX_NODES_INT,
     METADATA_MAX_STRING_LENGTH_INT,
     METADATA_NONFINITE_STR,
+    METADATA_TRUNCATED_KEY_SUFFIX_FORMAT_STR,
     METADATA_TRUNCATED_STR,
     METADATA_TRUNCATION_KEY_STR,
     METADATA_UNAVAILABLE_STR,
@@ -42,9 +45,9 @@ from ..constant.event_constant import (
 from .source import package_display_name
 from .timing import capture_timing, format_duration
 
-FrozenValue = Union[
-    None, bool, int, float, str, tuple["FrozenValue", ...], Mapping[str, "FrozenValue"]
-]
+type FrozenValue = (
+    None | bool | int | float | str | tuple["FrozenValue", ...] | Mapping[str, "FrozenValue"]
+)
 
 _STANDARD_FIELDS = frozenset(logging.LogRecord("", 0, "", 0, "", (), None).__dict__) | {
     RECORD_MESSAGE_KEY_STR,
@@ -66,6 +69,19 @@ def _safe_representation(value: Any) -> str:
     return _bounded_text(METADATA_UNSUPPORTED_STR.format(type(value).__name__, representation))
 
 
+def _bounded_mapping_key(key: str, output: Mapping[str, FrozenValue]) -> str:
+    candidate = _bounded_text(key)
+    if candidate not in output:
+        return candidate
+    collision = 2
+    while True:
+        suffix = METADATA_TRUNCATED_KEY_SUFFIX_FORMAT_STR.format(collision)
+        candidate = key[: METADATA_MAX_STRING_LENGTH_INT - len(suffix)] + suffix
+        if candidate not in output:
+            return candidate
+        collision += 1
+
+
 class _Snapshot:
     def __init__(self) -> None:
         self._ancestors: set[int] = set()
@@ -75,7 +91,11 @@ class _Snapshot:
         self._remaining -= 1
         if self._remaining < 0:
             return METADATA_TRUNCATED_STR
-        if value is None or isinstance(value, (bool, int)):
+        if value is None or isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            if value.bit_length() > METADATA_MAX_INTEGER_BITS_INT:
+                return METADATA_INTEGER_TOO_LARGE_STR.format(value.bit_length())
             return value
         if isinstance(value, str):
             return _bounded_text(value)
@@ -101,7 +121,7 @@ class _Snapshot:
                         break
                     if not isinstance(key, str):
                         return _safe_representation(value)
-                    output[_bounded_text(key)] = self.convert(item, depth + 1)
+                    output[_bounded_mapping_key(key, output)] = self.convert(item, depth + 1)
                 return MappingProxyType(output)
             sequence: list[FrozenValue] = []
             for index, item in enumerate(value):
@@ -182,7 +202,11 @@ def _exception_snapshot(
     current_traceback = exc_info[2]
     values: list[FrozenValue] = []
     seen: set[int] = set()
-    while current is not None and id(current) not in seen and len(values) < EXCEPTION_MAX_CHAIN_LENGTH_INT:
+    while (
+        current is not None
+        and id(current) not in seen
+        and len(values) < EXCEPTION_MAX_CHAIN_LENGTH_INT
+    ):
         seen.add(id(current))
         try:
             message = _bounded_text(str(current))
@@ -216,7 +240,10 @@ def _exception_snapshot(
             current = None
         current_traceback = current.__traceback__ if current is not None else None
     try:
-        text = _bounded_text("".join(traceback.format_exception(*exc_info)).rstrip(), EXCEPTION_MAX_TEXT_LENGTH_INT)
+        text = _bounded_text(
+            "".join(traceback.format_exception(*exc_info)).rstrip(),
+            EXCEPTION_MAX_TEXT_LENGTH_INT,
+        )
     except Exception:
         text = "\n".join(
             f"{value[EXCEPTION_TYPE_KEY_STR]}: {value[EXCEPTION_VALUE_KEY_STR]}"
@@ -252,13 +279,18 @@ def make_event(
         metadata = MappingProxyType({METADATA_TRUNCATION_KEY_STR: metadata_value})
     exception, exception_text = _exception_snapshot(record.exc_info)
     if exception_text is None and record.exc_text:
-        exception_text = str(record.exc_text)
+        try:
+            exception_text = _bounded_text(str(record.exc_text), EXCEPTION_MAX_TEXT_LENGTH_INT)
+        except Exception:
+            exception_text = _safe_representation(record.exc_text)
     return Event(
-        timestamp=datetime.fromtimestamp(record.created, timezone.utc),
+        timestamp=datetime.fromtimestamp(record.created, UTC),
         level=record.levelno,
         level_name=record.levelname,
         source=record.name,
-        package_name=package_name if package_name is not None else package_display_name(record.name),
+        package_name=(
+            package_name if package_name is not None else package_display_name(record.name)
+        ),
         message=message,
         metadata=metadata,
         pathname=record.pathname,

@@ -9,7 +9,7 @@ from typing import Any
 from ..helper.event import validate_metadata
 from ..helper.normalization import normalize_logger_name
 from ..helper.source import resolve_caller
-from ..helper.timing import TimerHandle, Timed, start_timer, timed
+from ..helper.timing import Timed, TimerHandle, start_timer, timed
 from . import runtime
 
 
@@ -77,6 +77,8 @@ class Logger:
     def warning(self, msg: object, *args: object, **kwargs: Any) -> None:
         """Emit WARNING with lazy formatting and structured keyword metadata."""
         self._emit(logging.WARNING, msg, args, **kwargs)
+
+    warn = warning
 
     def error(self, msg: object, *args: object, **kwargs: Any) -> None:
         """Emit ERROR; use exc_info=True to include a current exception."""

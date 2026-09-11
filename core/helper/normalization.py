@@ -81,7 +81,9 @@ def normalize_logger_name(value: object, *, package_rule: bool = True) -> str:
         or "=" in result
         or any(not segment for segment in result.split("."))
     ):
-        raise ValueError("expected a dotted logger name without empty segments, whitespace, ',' or '='")
+        raise ValueError(
+            "expected a dotted logger name without empty segments, whitespace, ',' or '='"
+        )
     if package_rule and result == constants.ROOT_LOGGER_NAME_STR:
         raise ValueError("the logger name 'root' is reserved for global configuration")
     return result
@@ -118,11 +120,16 @@ def normalize_dsn(value: object) -> str:
     """
     if not isinstance(value, str):
         raise ValueError("expected a DSN string (value redacted)")
-    candidate = value.strip()
-    if not candidate:
-        return constants.DISABLED_DSN_STR
+    candidate = constants.DISABLED_DSN_STR
     valid = False
     try:
+        # Invoke the built-in implementation directly so a hostile ``str``
+        # subclass cannot expose credentials from an overridden ``strip`` or
+        # ``__str__`` method.  Keep every operation involving the supplied DSN
+        # inside this protected block for the same reason.
+        candidate = str.__str__(value).strip()
+        if not candidate:
+            return constants.DISABLED_DSN_STR
         parts = urlsplit(candidate)
         project = parts.path.rsplit("/", 1)[-1]
         valid = (
@@ -137,9 +144,12 @@ def normalize_dsn(value: object) -> str:
             and not parts.query
             and not parts.fragment
         )
-    except (ValueError, TypeError):
+    except Exception:
         # Raise outside this block: even __context__ must not retain a URL error.
         pass
     if not valid:
-        raise ValueError("expected an HTTP(S) Sentry DSN with public key, host and project ID (value redacted)")
+        raise ValueError(
+            "expected an HTTP(S) Sentry DSN with public key, host and project ID "
+            "(value redacted)"
+        )
     return RedactedDsn(candidate)

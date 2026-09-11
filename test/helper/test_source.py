@@ -14,6 +14,10 @@ def test_package_display_name_heuristic(source, display):
     assert package_display_name(source) == display
 
 
+def test_main_display_name_does_not_retain_empty_separator_words():
+    assert package_display_name("__main__") == "Main"
+
+
 def test_source_preserves_actual_caller_and_stacklevel():
     def wrapper():
         return resolve_caller(stacklevel=2, stack_info=True)

@@ -12,3 +12,8 @@ htmlcov/
 build/
 dist/
 
+
+experimental-resource/*
+commands.txt
+activate
+

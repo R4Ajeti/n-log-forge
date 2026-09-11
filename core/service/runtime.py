@@ -8,6 +8,7 @@ Daemon cleanup owns retired providers; it never edits active logging state.
 
 from __future__ import annotations
 
+import atexit
 import logging
 import math
 import threading
@@ -23,11 +24,20 @@ from ..constant.runtime_constant import (
     OWNED_HANDLER_NAME_STR,
     REPLACE_POLICY_STR,
 )
+from ..constant.sentry_constant import SENTRY_INTERNAL_LOGGER_PREFIX_STR
 from ..helper.event import make_event
-from ..helper.normalization import normalize_boolean, normalize_log_level, normalize_logger_name
+from ..helper.normalization import normalize_boolean
 from ..proxy.console import ConsoleProvider
 from ..proxy.provider import Provider
-from .configuration import Config, build_config, normalize_runtime, read_environment
+from .configuration import (
+    Config,
+    build_config,
+    normalize_runtime,
+    normalize_runtime_package_name,
+    normalize_runtime_package_rule,
+    read_environment,
+    validate_runtime_key,
+)
 
 
 def _timeout(value: float) -> float:
@@ -131,8 +141,12 @@ class Runtime:
             self._update(changes, reload=reload_value)
 
     def package_rule(self, name: str, level: object = OMITTED) -> None:
-        name = normalize_logger_name(name, package_rule=True)
-        normalized = OMITTED if level is OMITTED else normalize_log_level(level)
+        normalized: object
+        if level is OMITTED:
+            name = normalize_runtime_package_name(name)
+            normalized = OMITTED
+        else:
+            name, normalized = normalize_runtime_package_rule(name, level)
         with self._transition:
             rules = self._rules.copy()
             if normalized is OMITTED:
@@ -143,7 +157,11 @@ class Runtime:
             if self._stopped:
                 self._rules = rules
                 return
-            authorized = {name} if rules.get(name, OMITTED) != self._rules.get(name, OMITTED) else set()
+            authorized = (
+                {name}
+                if rules.get(name, OMITTED) != self._rules.get(name, OMITTED)
+                else set()
+            )
             self._update({}, rules=rules, authorized=authorized)
 
     def _update(
@@ -161,6 +179,7 @@ class Runtime:
         )
         overrides = self._overrides.copy()
         for key, value in changes.items():
+            validate_runtime_key(key)
             if value is OMITTED:
                 continue
             if value is None:
@@ -257,9 +276,18 @@ class Runtime:
             snapshot = self._snapshot
             if snapshot is None or record.levelno < snapshot.config.threshold(record.name):
                 return
+            sentry_internal = (
+                record.name == SENTRY_INTERNAL_LOGGER_PREFIX_STR
+                or record.name.startswith(SENTRY_INTERNAL_LOGGER_PREFIX_STR + ".")
+            )
             resources = tuple(
-                resource for resource in snapshot.resources
-                if resource is snapshot.console or record.levelno >= snapshot.config.sentry_level
+                resource
+                for resource in snapshot.resources
+                if resource is snapshot.console
+                or (
+                    not sentry_internal
+                    and record.levelno >= snapshot.config.sentry_level
+                )
             )
             if not resources:
                 return
@@ -267,9 +295,18 @@ class Runtime:
                 resource.users += 1
         self._emitting.active = True
         try:
-            event = make_event(
-                record, snapshot.config.package_name, snapshot.config.duration_precision
-            )
+            try:
+                event = make_event(
+                    record, snapshot.config.package_name, snapshot.config.duration_precision
+                )
+            except Exception:
+                # Host record factories and third-party handlers may attach values
+                # whose conversion fails. Event materialization is part of owned
+                # delivery, so an ordinary logging call must remain isolated from
+                # those failures just like a provider call. Deliberately do not
+                # catch BaseException: process exits and interrupts still pass
+                # through normally.
+                return
             for resource in resources:
                 try:
                     resource.provider.emit(event)
@@ -389,3 +426,16 @@ class Runtime:
 
 
 RUNTIME = Runtime()
+
+
+def _shutdown_at_exit() -> None:
+    """Attempt bounded best-effort cleanup before logging's own exit hook."""
+    try:
+        RUNTIME.shutdown(DEFAULT_TIMEOUT_SECONDS_FLOAT)
+    except Exception:
+        # Interpreter teardown may have partially dismantled host resources.
+        # Exit cleanup is best effort and must not create recursive diagnostics.
+        pass
+
+
+atexit.register(_shutdown_at_exit)

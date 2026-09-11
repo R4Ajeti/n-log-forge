@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Callable
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from functools import wraps
 from time import perf_counter_ns
 from types import TracebackType
-from typing import Any, Callable, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 from ..constant.event_constant import (
     MAX_DURATION_PRECISION_INT,
@@ -96,7 +97,9 @@ class Timed:
 
     def __call__(self, function: _Function) -> _Function:
         if inspect.isgeneratorfunction(function) or inspect.isasyncgenfunction(function):
-            raise TypeError("Timing decorators do not support generator or async-generator functions")
+            raise TypeError(
+                "Timing decorators do not support generator or async-generator functions"
+            )
         if inspect.iscoroutinefunction(function):
 
             @wraps(function)

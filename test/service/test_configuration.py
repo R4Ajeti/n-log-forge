@@ -10,7 +10,10 @@ from core.service.configuration import (
     ConfigurationError,
     build_config,
     normalize_runtime,
+    normalize_runtime_package_name,
+    normalize_runtime_package_rule,
     read_environment,
+    validate_runtime_key,
 )
 
 
@@ -120,7 +123,11 @@ def test_environment_snapshot_does_not_follow_later_mutation() -> None:
     [
         ({"LOGGER": "banana", "DEBUGGING": "true"}, {"level": "info"}, "level"),
         ({"SENTRY_LEVEL": "banana"}, {"sentryLevel": 40}, "sentryLevel"),
-        ({"SENTRY_DATA_SOURCE_NAME": "not-a-dsn"}, {"sentryDataSourceName": ""}, "sentryDataSourceName"),
+        (
+            {"SENTRY_DATA_SOURCE_NAME": "not-a-dsn"},
+            {"sentryDataSourceName": ""},
+            "sentryDataSourceName",
+        ),
         ({"DURATION_PRECISION": "7"}, {"durationPrecision": 1}, "durationPrecision"),
         ({"DEBUGGING": "maybe"}, {"debugging": True}, "debugging"),
     ],
@@ -172,10 +179,83 @@ def test_reload_environment_uses_the_shared_boolean_parser(value: object) -> Non
     assert normalize_runtime("reloadEnvironment", value) is True
 
 
+def test_every_stored_runtime_key_can_be_validated_before_reset_handling() -> None:
+    stored_keys = (
+        "level",
+        "debugging",
+        "consoleEnabled",
+        "timestampFormat",
+        "packageName",
+        "durationPrecision",
+        "sentryDataSourceName",
+        "sentryLevel",
+        "sentryEnvironment",
+        "sentryRelease",
+        "manageRootLevel",
+        "rootHandlerPolicy",
+    )
+    for key in stored_keys:
+        assert validate_runtime_key(key) is None
+
+
+@pytest.mark.parametrize(
+    "key", ["unknown", "sentryEnabled", "LOGGER_PACKAGES", "reloadEnvironment"]
+)
+def test_unknown_or_nonstored_runtime_keys_are_rejected_before_none_reset(key: str) -> None:
+    with pytest.raises(ConfigurationError) as caught:
+        validate_runtime_key(key)
+    assert caught.value.key == key
+    assert caught.value.source == "runtime"
+    assert "unsupported configuration key" in str(caught.value)
+
+
+def test_runtime_package_rule_normalization_has_key_and_source_context() -> None:
+    assert normalize_runtime_package_rule(" Pkg.child ", " DeBuG ") == ("Pkg.child", 10)
+    assert normalize_runtime_package_name(" Pkg.child ") == "Pkg.child"
+
+    for name, level in (("bad name", "info"), ("pkg", "banana"), ("root", 20)):
+        with pytest.raises(ConfigurationError) as caught:
+            normalize_runtime_package_rule(name, level)
+        assert caught.value.key == "LOGGER_PACKAGES"
+        assert caught.value.source == "runtime"
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None
+
+    with pytest.raises(ConfigurationError) as reset_error:
+        normalize_runtime_package_name("bad reset name")
+    assert reset_error.value.key == "LOGGER_PACKAGES"
+    assert reset_error.value.source == "runtime"
+
+
+def test_environment_dsn_cannot_invoke_credential_leaking_string_overrides() -> None:
+    secret = "do-not-expose-this-environment-dsn"
+
+    class HostileDsn(str):
+        def __str__(self) -> str:
+            raise RuntimeError(secret)
+
+        def strip(self, chars: str | None = None) -> str:
+            raise RuntimeError(secret)
+
+    valid_dsn = "https://public@example.invalid/prefix/123"
+    environment = read_environment({"SENTRY_DATA_SOURCE_NAME": HostileDsn(f" {valid_dsn} ")})
+    assert environment["sentryDataSourceName"] == valid_dsn
+    assert secret not in repr(environment)
+
+    with pytest.raises(ConfigurationError) as caught:
+        read_environment({"SENTRY_DATA_SOURCE_NAME": HostileDsn("invalid")})
+    assert caught.value.key == "sentryDataSourceName"
+    assert "SENTRY_DATA_SOURCE_NAME" in caught.value.source
+    assert secret not in str(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
 def test_dsn_disable_and_reset_reveal_environment() -> None:
     environment = read_environment({"SENTRY_DATA_SOURCE_NAME": "https://private@example.invalid/1"})
     assert build_config(environment, {}, {}).sentry_data_source_name
-    assert build_config(environment, {"sentryDataSourceName": " \t"}, {}).sentry_data_source_name == ""
+    disabled = build_config(environment, {"sentryDataSourceName": " \t"}, {})
+    assert disabled.sentry_data_source_name == ""
     assert build_config(environment, {}, {}).sentry_data_source_name
 
 
@@ -220,7 +300,9 @@ def test_hierarchy_specificity_segment_matching_and_case_sensitivity() -> None:
 
 
 def test_source_merging_precedes_specificity_and_zero_rules_mask_then_inherit() -> None:
-    environment = read_environment({"LOGGER": "info", "LOGGER_PACKAGES": "pkg=warning,pkg.api=error"})
+    environment = read_environment(
+        {"LOGGER": "info", "LOGGER_PACKAGES": "pkg=warning,pkg.api=error"}
+    )
     assert build_config(environment, {}, {"pkg": 10}).threshold("pkg.api") == 40
     assert build_config(environment, {}, {"pkg": 10, "pkg.api": 0}).threshold("pkg.api") == 10
     assert build_config(environment, {}, {"pkg": 0, "pkg.api": 0}).threshold("pkg.api") == 20

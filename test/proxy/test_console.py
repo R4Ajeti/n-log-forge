@@ -1,14 +1,17 @@
 import io
 import logging
-from datetime import datetime, timezone
+from dataclasses import replace
+from datetime import UTC, datetime
 
 from core.helper.event import make_event
 from core.proxy.console import ConsoleProvider
 
 
 def event(**metadata):
-    record = logging.LogRecord("my_package.api", logging.INFO, "api.py", 12, "Application started", (), None)
-    record.created = datetime(2026, 9, 9, 20, 35, 42, 182123, tzinfo=timezone.utc).timestamp()
+    record = logging.LogRecord(
+        "my_package.api", logging.INFO, "api.py", 12, "Application started", (), None
+    )
+    record.created = datetime(2026, 9, 9, 20, 35, 42, 182123, tzinfo=UTC).timestamp()
     record.__dict__.update(metadata)
     return make_event(record)
 
@@ -35,10 +38,24 @@ def test_metadata_is_sorted_compact_json_and_control_characters_are_escaped():
     assert "\n" not in output
 
 
+def test_metadata_keys_with_separators_are_json_quoted():
+    output = ConsoleProvider().format(event(**{"a b": 1, "x=y": 2, "pipe|key": 3}))
+    assert output.endswith(r' | "a b"=1 "pipe\u007ckey"=3 "x=y"=2')
+
+
+def test_unpaired_surrogates_are_escaped_before_writing():
+    broken = replace(event(), message="bad\ud800message")
+    provider = ConsoleProvider(stream=io.StringIO())
+    assert r"bad\ud800message" in provider.format(broken)
+    provider.emit(broken)
+
+
 def test_long_columns_expand_without_changing_following_record_widths():
     provider = ConsoleProvider()
     original = provider.format(event())
-    record = logging.LogRecord("long_source_name_without_truncation.api", 20, "", 0, "message", (), None)
+    record = logging.LogRecord(
+        "long_source_name_without_truncation.api", 20, "", 0, "message", (), None
+    )
     large = provider.format(make_event(record, "A package display name longer than its column"))
     assert record.name in large
     assert "A package display name longer than its column" in large

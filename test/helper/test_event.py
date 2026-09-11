@@ -90,6 +90,20 @@ def test_bounded_cycle_broken_repr_nonfinite_and_unsupported_metadata():
     assert converted["nonstring"].startswith("<dict:")
 
 
+def test_huge_integer_uses_visible_bounded_fallback():
+    converted = thaw(snapshot({"huge": 1 << 5000}))
+    assert converted == {"huge": "<integer-too-large: 5001 bits>"}
+
+
+def test_truncated_mapping_keys_remain_distinct_and_bounded():
+    prefix = "k" * METADATA_MAX_STRING_LENGTH_INT
+    converted = thaw(snapshot({prefix + "a": 1, prefix + "b": 2}))
+    assert list(converted.values()) == [1, 2]
+    assert len(converted) == 2
+    assert all(len(key) <= METADATA_MAX_STRING_LENGTH_INT for key in converted)
+    assert any(key.endswith("<truncated:2>") for key in converted)
+
+
 def test_depth_and_total_node_budgets_are_visible():
     deep = []
     current = deep
@@ -168,3 +182,16 @@ def test_bad_message_and_exception_str_do_not_suppress_event():
     assert "<unavailable>" in event.message
     assert event.exception_text
     assert "BrokenError" in event.exception_text
+
+
+def test_broken_existing_exception_text_is_safely_snapshotted():
+    class BrokenText:
+        def __str__(self):
+            raise RuntimeError("broken string")
+
+        def __repr__(self):
+            raise RuntimeError("broken representation")
+
+    value = record()
+    value.exc_text = BrokenText()
+    assert make_event(value).exception_text == "<BrokenText: <unavailable>>"

@@ -12,6 +12,7 @@ from pathlib import Path
 from types import FrameType
 
 from ..constant.event_constant import (
+    CORE_PACKAGE_MODULE_STR,
     DISPLAY_CACHE_SIZE_INT,
     MAIN_MODULE_STR,
     MODULE_FILE_KEY_STR,
@@ -52,7 +53,7 @@ def resolve_caller(stacklevel: int = 1, stack_info: bool = False) -> Caller:
     """Resolve the user's selected frame, skipping library and logging internals."""
     if isinstance(stacklevel, bool) or not isinstance(stacklevel, int) or stacklevel < 1:
         raise ValueError("stacklevel must be a positive integer")
-    frame = sys._getframe(1)
+    frame: FrameType | None = sys._getframe(1)
     selected: FrameType | None = None
     try:
         while frame is not None:
@@ -60,6 +61,8 @@ def resolve_caller(stacklevel: int = 1, stack_info: bool = False) -> Caller:
             internal = isinstance(module, str) and (
                 module == PACKAGE_MODULE_STR
                 or module.startswith(PACKAGE_MODULE_STR + ".")
+                or module == CORE_PACKAGE_MODULE_STR
+                or module.startswith(CORE_PACKAGE_MODULE_STR + ".")
                 or module == STANDARD_LOGGING_MODULE_STR
                 or module.startswith(STANDARD_LOGGING_MODULE_STR + ".")
             )
@@ -92,4 +95,6 @@ def resolve_caller(stacklevel: int = 1, stack_info: bool = False) -> Caller:
 @lru_cache(maxsize=DISPLAY_CACHE_SIZE_INT)
 def package_display_name(source: str) -> str:
     """Title-case words in the source's first path segment; never inspect packages."""
-    return " ".join(re.split(r"[_-]+", source.split(".", 1)[0])).title()
+    segment = source.split(".", 1)[0]
+    words = [word for word in re.split(r"[_-]+", segment) if word]
+    return (" ".join(words) or segment).title()

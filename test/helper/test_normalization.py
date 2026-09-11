@@ -101,12 +101,17 @@ def test_invalid_precision(value: object) -> None:
         normalize_precision(value)
 
 
-@pytest.mark.parametrize("name", ["a", "A", "my-package", "my-package.api", "  Foo.Bar  ", "root.child"])
+@pytest.mark.parametrize(
+    "name", ["a", "A", "my-package", "my-package.api", "  Foo.Bar  ", "root.child"]
+)
 def test_valid_logger_names_preserve_case(name: str) -> None:
     assert normalize_logger_name(name) == name.strip()
 
 
-@pytest.mark.parametrize("name", [None, "", " ", "a..b", ".a", "a.", "a b", "a\tb", "a,b", "a=b", "root"])
+@pytest.mark.parametrize(
+    "name",
+    [None, "", " ", "a..b", ".a", "a.", "a b", "a\tb", "a,b", "a=b", "root"],
+)
 def test_invalid_rule_names(name: object) -> None:
     with pytest.raises(ValueError):
         normalize_logger_name(name)
@@ -198,5 +203,27 @@ def test_invalid_dsn_errors_and_exception_context_are_redacted(value: object) ->
         normalize_dsn(value)
     assert "private" not in str(caught.value)
     assert "secret-invalid-host" not in str(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+def test_dsn_string_subclass_cannot_run_credential_leaking_overrides() -> None:
+    secret = "do-not-expose-this-dsn"
+
+    class HostileDsn(str):
+        def __str__(self) -> str:
+            raise RuntimeError(secret)
+
+        def strip(self, chars: str | None = None) -> str:
+            raise RuntimeError(secret)
+
+    valid = HostileDsn(" https://public@example.invalid/prefix/123 ")
+    normalized = normalize_dsn(valid)
+    assert normalized == "https://public@example.invalid/prefix/123"
+    assert secret not in repr(normalized)
+
+    with pytest.raises(ValueError) as caught:
+        normalize_dsn(HostileDsn("not-a-dsn"))
+    assert secret not in str(caught.value)
     assert caught.value.__cause__ is None
     assert caught.value.__context__ is None

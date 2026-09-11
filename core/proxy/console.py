@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import threading
 from typing import TextIO
@@ -25,7 +26,11 @@ def escape_header(value: str) -> str:
     for character in value:
         if character in escapes:
             result.append(escapes[character])
-        elif ord(character) < 32 or 127 <= ord(character) <= 159:
+        elif (
+            ord(character) < 32
+            or 127 <= ord(character) <= 159
+            or 0xD800 <= ord(character) <= 0xDFFF
+        ):
             result.append(f"\\u{ord(character):04x}")
         elif character in ("\u2028", "\u2029"):
             result.append(f"\\u{ord(character):04x}")
@@ -36,6 +41,15 @@ def escape_header(value: str) -> str:
 
 def _following_lines(value: str) -> str:
     return "\n".join(escape_header(line) for line in value.splitlines())
+
+
+_PLAIN_METADATA_KEY = re.compile(r"[^\s=|\\\x00-\x1f\x7f-\x9f]+\Z")
+
+
+def _metadata_key(value: str) -> str:
+    if _PLAIN_METADATA_KEY.fullmatch(value):
+        return value
+    return json.dumps(value, ensure_ascii=True, separators=(",", ":")).replace("|", r"\u007c")
 
 
 class ConsoleProvider:
@@ -56,7 +70,9 @@ class ConsoleProvider:
     def format(self, event: Event) -> str:
         if self._timestamp_format is None:
             timestamp = event.timestamp.strftime(DEFAULT_TIMESTAMP_FORMAT_STR)
-            timestamp += TIMESTAMP_MILLISECOND_SUFFIX_STR.format(event.timestamp.microsecond // 1000)
+            timestamp += TIMESTAMP_MILLISECOND_SUFFIX_STR.format(
+                event.timestamp.microsecond // 1000
+            )
         else:
             timestamp = event.timestamp.strftime(self._timestamp_format)
         line = (
@@ -70,11 +86,17 @@ class ConsoleProvider:
         if event.metadata:
             items = []
             for key in sorted(event.metadata):
-                encoded = json.dumps(thaw(event.metadata[key]), ensure_ascii=True, sort_keys=True, separators=(",", ":"), allow_nan=False)
+                encoded = json.dumps(
+                    thaw(event.metadata[key]),
+                    ensure_ascii=True,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                )
                 # JSON values already escape controls; escaping only literal pipes
                 # preserves their compact JSON representation within the column.
                 encoded = encoded.replace("|", r"\u007c")
-                items.append(f"{escape_header(key)}={encoded}")
+                items.append(f"{_metadata_key(key)}={encoded}")
             line += " | " + " ".join(items)
         if event.exception_text:
             line += "\n" + _following_lines(event.exception_text)

@@ -35,6 +35,20 @@ class ConfigurationError(ValueError):
         super().__init__(f"Invalid {source} configuration for {key}: {reason}")
 
 
+def validate_runtime_key(key: str) -> None:
+    """Reject a key that cannot be stored as a programmatic override.
+
+    Callers must perform this check before interpreting ``None`` as a reset so
+    unknown reset keys cannot bypass validation. ``reloadEnvironment`` is a
+    per-call control rather than stored configuration and is intentionally not
+    accepted here; :func:`normalize_runtime` continues to normalize that control.
+    """
+    if key not in constants.CONFIGURATION_KEYS_TUPLE:
+        raise ConfigurationError(
+            key, constants.RUNTIME_SOURCE_STR, "unsupported configuration key"
+        )
+
+
 def _normalize(key: str, value: object, source: str) -> object:
     reason = "unsupported configuration key"
     try:
@@ -61,7 +75,58 @@ def _normalize(key: str, value: object, source: str) -> object:
 
 def normalize_runtime(key: str, value: object) -> object:
     """Validate a non-None programmatic override, including reload control."""
+    if key != constants.RELOAD_ENVIRONMENT_KEY_STR:
+        validate_runtime_key(key)
     return _normalize(key, value, constants.RUNTIME_SOURCE_STR)
+
+
+def _normalize_package_name(name: object, source: str) -> str:
+    error_reason: str | None = None
+    try:
+        normalized_name = normalize_logger_name(name)
+    except (TypeError, ValueError) as error:
+        error_reason = str(error)
+    if error_reason is not None:
+        raise ConfigurationError(constants.PACKAGE_RULES_KEY_STR, source, error_reason)
+    return normalized_name
+
+
+def _normalize_package_rule(name: object, level: object, source: str) -> tuple[str, int]:
+    normalized_name = _normalize_package_name(name, source)
+    error_reason: str | None = None
+    try:
+        normalized_level = normalize_log_level(level)
+    except (TypeError, ValueError) as error:
+        error_reason = str(error)
+    if error_reason is not None:
+        raise ConfigurationError(constants.PACKAGE_RULES_KEY_STR, source, error_reason)
+    return normalized_name, normalized_level
+
+
+def normalize_runtime_package_name(name: object) -> str:
+    """Normalize a runtime package name, including for an exact-rule reset."""
+    return _normalize_package_name(name, constants.RUNTIME_SOURCE_STR)
+
+
+def normalize_runtime_package_rule(name: object, level: object) -> tuple[str, int]:
+    """Normalize one runtime package rule with configuration error context."""
+    return _normalize_package_rule(name, level, constants.RUNTIME_SOURCE_STR)
+
+
+def _environment_text(key: str, variable: str, value: object) -> str:
+    """Trim an environment string without invoking subclass overrides."""
+    if not isinstance(value, str):
+        raise ConfigurationError(
+            key, f"environment {variable}", "expected a string environment value"
+        )
+    try:
+        return str.__str__(value).strip()
+    except Exception:
+        # Raise later so an exception from an adversarial value is not chained.
+        pass
+    raise ConfigurationError(
+        key, f"environment {variable}", "expected a string environment value"
+    )
 
 
 def read_environment(environ: Mapping[str, str] | None = None) -> Mapping[str, object]:
@@ -74,10 +139,18 @@ def read_environment(environ: Mapping[str, str] | None = None) -> Mapping[str, o
     normalized: dict[str, object] = {}
     for key, variable in constants.ENVIRONMENT_KEYS_MAPPING.items():
         value = source.get(variable)
-        if value is not None and value.strip():
-            normalized[key] = _normalize(key, value.strip(), f"environment {variable}")
+        if value is not None:
+            text = _environment_text(key, variable, value)
+            if text:
+                normalized[key] = _normalize(key, text, f"environment {variable}")
     package_text = source.get(constants.PACKAGE_RULES_KEY_STR)
-    if package_text is not None and package_text.strip():
+    if package_text is not None:
+        package_text = _environment_text(
+            constants.PACKAGE_RULES_KEY_STR,
+            constants.PACKAGE_RULES_KEY_STR,
+            package_text,
+        )
+    if package_text:
         error_reason: str | None = None
         try:
             normalized[constants.PACKAGE_RULES_KEY_STR] = normalize_package_rules(package_text)
@@ -139,17 +212,15 @@ def _validated_rules(value: object, source: str) -> dict[str, int]:
     if not isinstance(value, Mapping):
         raise ConfigurationError(constants.PACKAGE_RULES_KEY_STR, source, "expected a rule mapping")
     rules: dict[str, int] = {}
-    error_reason: str | None = None
-    try:
-        for raw_name, raw_level in value.items():
-            name = normalize_logger_name(raw_name)
-            if name in rules:
-                raise ValueError("duplicate exact logger name in package rules")
-            rules[name] = normalize_log_level(raw_level)
-    except ValueError as error:
-        error_reason = str(error)
-    if error_reason is not None:
-        raise ConfigurationError(constants.PACKAGE_RULES_KEY_STR, source, error_reason)
+    for raw_name, raw_level in value.items():
+        name, level = _normalize_package_rule(raw_name, raw_level, source)
+        if name in rules:
+            raise ConfigurationError(
+                constants.PACKAGE_RULES_KEY_STR,
+                source,
+                "duplicate exact logger name in package rules",
+            )
+        rules[name] = level
     return rules
 
 
@@ -170,7 +241,10 @@ def build_config(
         (constants.RUNTIME_SOURCE_STR, runtime),
     ):
         for key, value in values.items():
-            if key == constants.PACKAGE_RULES_KEY_STR and source == constants.ENVIRONMENT_SOURCE_STR:
+            if (
+                key == constants.PACKAGE_RULES_KEY_STR
+                and source == constants.ENVIRONMENT_SOURCE_STR
+            ):
                 continue
             merged[key] = _normalize(key, value, source)
     rules = _validated_rules(
@@ -194,7 +268,11 @@ def build_config(
         debugging=debugging,
         global_level=global_level,
         console_enabled=cast(
-            bool, merged.get(constants.CONSOLE_ENABLED_KEY_STR, constants.DEFAULT_CONSOLE_ENABLED_BOOL)
+            bool,
+            merged.get(
+                constants.CONSOLE_ENABLED_KEY_STR,
+                constants.DEFAULT_CONSOLE_ENABLED_BOOL,
+            ),
         ),
         timestamp_format=cast("str | None", merged.get(constants.TIMESTAMP_FORMAT_KEY_STR)),
         package_name=cast("str | None", merged.get(constants.PACKAGE_NAME_KEY_STR)),
@@ -209,10 +287,17 @@ def build_config(
         sentry_release=cast("str | None", merged.get(constants.SENTRY_RELEASE_KEY_STR)),
         manage_root_level=cast(
             bool,
-            merged.get(constants.MANAGE_ROOT_LEVEL_KEY_STR, constants.DEFAULT_MANAGE_ROOT_LEVEL_BOOL),
+            merged.get(
+                constants.MANAGE_ROOT_LEVEL_KEY_STR,
+                constants.DEFAULT_MANAGE_ROOT_LEVEL_BOOL,
+            ),
         ),
         root_handler_policy=cast(
-            str, merged.get(constants.ROOT_HANDLER_POLICY_KEY_STR, constants.ROOT_POLICY_PRESERVE_STR)
+            str,
+            merged.get(
+                constants.ROOT_HANDLER_POLICY_KEY_STR,
+                constants.ROOT_POLICY_PRESERVE_STR,
+            ),
         ),
         package_rules=rules,
     )

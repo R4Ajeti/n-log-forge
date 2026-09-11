@@ -6,7 +6,15 @@ import logging
 from types import MappingProxyType
 from typing import Final
 
-OMITTED: Final = object()
+
+class _Omitted:
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "<omitted>"
+
+
+OMITTED: Final[_Omitted] = _Omitted()
 
 LEVEL_KEY_STR: Final = "level"
 DEBUGGING_KEY_STR: Final = "debugging"
