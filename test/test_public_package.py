@@ -13,8 +13,11 @@ from dataclasses import fields
 from pathlib import Path
 
 import n_log_forge
-from core.constant.configuration_constant import ENVIRONMENT_KEYS_MAPPING, PACKAGE_RULES_KEY_STR
-from core.helper.event import Event
+from n_log_forge.core.constant.configuration_constant import (
+    ENVIRONMENT_KEYS_MAPPING,
+    PACKAGE_RULES_KEY_STR,
+)
+from n_log_forge.core.helper.event import Event
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _PUBLIC_API = {
@@ -90,7 +93,7 @@ def test_required_public_api_is_explicit_and_type_marked() -> None:
         assert getattr(n_log_forge, name) is not None
     assert not hasattr(n_log_forge, "Logger")
     assert (_PROJECT_ROOT / "n_log_forge" / "py.typed").is_file()
-    assert (_PROJECT_ROOT / "core" / "py.typed").is_file()
+    assert (_PROJECT_ROOT / "n_log_forge" / "core" / "py.typed").is_file()
 
 
 def test_import_and_lookup_are_passive_without_sentry() -> None:
@@ -140,7 +143,7 @@ def test_pyproject_declares_distribution_layout_extra_and_minimum_python() -> No
     assert project["requires-python"] == ">=3.14"
     assert project["dependencies"] == []
     assert project["optional-dependencies"]["sentry"]
-    assert set(wheel["packages"]) == {"core", "n_log_forge"}
+    assert set(wheel["packages"]) == {"n_log_forge"}
 
 
 def test_sync_async_example_runs_offline_through_the_public_api() -> None:

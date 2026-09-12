@@ -470,9 +470,9 @@ outside the supported contract.
 
 ## Development
 
-The repository intentionally keeps its implementation in root-level `core/`,
-with the stable import facade in root-level `n_log_forge/`. `core` is internal
-and unsupported as a consumer API.
+The repository keeps its implementation in the private `n_log_forge/core/`
+subpackage, behind the stable `n_log_forge` import facade. The internal
+subpackage is unsupported as a consumer API.
 
 From the repository root, create a Python 3.14 environment and install all local
 checks:

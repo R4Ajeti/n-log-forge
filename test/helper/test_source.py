@@ -2,7 +2,7 @@ import types
 
 import pytest
 
-from core.helper.source import package_display_name, resolve_caller
+from n_log_forge.core.helper.source import package_display_name, resolve_caller
 
 
 @pytest.mark.parametrize(

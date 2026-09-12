@@ -6,7 +6,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from core.service.configuration import (
+from n_log_forge.core.service.configuration import (
     ConfigurationError,
     build_config,
     normalize_runtime,

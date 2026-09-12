@@ -1,0 +1,27 @@
+{
+  "providerArguments": {
+    "dsn": "https://public-key@example.invalid/123",
+    "environment": "test",
+    "release": "1.0.0"
+  },
+  "event": {
+    "timestamp": "2026-09-09T20:35:42.182Z",
+    "level": 40,
+    "levelName": "ERROR",
+    "source": "example.worker",
+    "packageName": "Example",
+    "message": "Illustrative failure",
+    "metadata": {
+      "requestId": "abc123"
+    },
+    "pathname": "/example/worker.py",
+    "lineno": 24,
+    "function": "process",
+    "exception": null,
+    "exceptionText": null,
+    "stackInfo": null,
+    "operation": "batch",
+    "elapsedNs": 842000000,
+    "duration": "0.9s"
+  }
+}

@@ -11,12 +11,15 @@ from typing import Any
 
 import pytest
 
-from core.constant.configuration_constant import ENVIRONMENT_KEYS_MAPPING, PACKAGE_RULES_KEY_STR
-from core.constant.runtime_constant import OWNED_HANDLER_NAME_STR
-from core.helper.event import Event, thaw
-from core.proxy import sentry as sentry_module
-from core.service import runtime as runtime_module
-from core.service.configuration import ConfigurationError
+from n_log_forge.core.constant.configuration_constant import (
+    ENVIRONMENT_KEYS_MAPPING,
+    PACKAGE_RULES_KEY_STR,
+)
+from n_log_forge.core.constant.runtime_constant import OWNED_HANDLER_NAME_STR
+from n_log_forge.core.helper.event import Event, thaw
+from n_log_forge.core.proxy import sentry as sentry_module
+from n_log_forge.core.service import runtime as runtime_module
+from n_log_forge.core.service.configuration import ConfigurationError
 
 
 class RecordingProvider:

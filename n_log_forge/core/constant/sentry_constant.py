@@ -1,4 +1,4 @@
-"""Inert Sentry event contract and transport limits."""
+"""Private inert Sentry event contract and transport limits."""
 
 SENTRY_QUEUE_CAPACITY_INT = 100
 SENTRY_DROP_COUNTER_MAX_INT = 9_223_372_036_854_775_807

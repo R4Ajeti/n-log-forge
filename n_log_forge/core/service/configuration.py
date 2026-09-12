@@ -1,4 +1,4 @@
-"""Validate candidate configuration and resolve immutable logging policies.
+"""Privately validate configuration and resolve immutable logging policies.
 
 This module owns no active process state and never imports provider SDKs. The
 runtime coordinates publication only after it has prepared all resources.
@@ -14,8 +14,8 @@ from functools import lru_cache
 from types import MappingProxyType
 from typing import cast
 
-from core.constant import configuration_constant as constants
-from core.helper.normalization import (
+from ..constant import configuration_constant as constants
+from ..helper.normalization import (
     normalize_boolean,
     normalize_dsn,
     normalize_log_level,

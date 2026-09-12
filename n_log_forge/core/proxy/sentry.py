@@ -1,4 +1,4 @@
-"""Explicit, isolated Sentry events using the SDK's bounded HTTP transport.
+"""Private isolated Sentry events using the SDK's bounded HTTP transport.
 
 No Sentry import takes place until a configured provider is constructed. Capture
 uses the owned client directly with ``scope=None``: even global SDK processors
@@ -11,8 +11,8 @@ import logging
 import threading
 from typing import TYPE_CHECKING, Any, cast
 
-from core.constant import sentry_constant as key
-from core.helper.event import Event, thaw
+from ..constant import sentry_constant as key
+from ..helper.event import Event, thaw
 
 if TYPE_CHECKING:
     from sentry_sdk import Client

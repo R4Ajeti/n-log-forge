@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.helper.normalization import (
+from n_log_forge.core.helper.normalization import (
     normalize_boolean,
     normalize_dsn,
     normalize_log_level,

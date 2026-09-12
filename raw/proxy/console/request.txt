@@ -1,0 +1,2 @@
+Illustrative console delivery writes the formatted event to standard-error.
+No live request is made by the console provider.

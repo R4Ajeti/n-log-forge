@@ -1,4 +1,4 @@
-"""Context-local monotonic operations with immutable inherited stack entries."""
+"""Private context-local operations with immutable inherited stack entries."""
 
 from __future__ import annotations
 

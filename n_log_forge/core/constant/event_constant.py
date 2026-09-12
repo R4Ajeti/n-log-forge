@@ -1,4 +1,4 @@
-"""Immutable event schema, limits, and console rendering conventions."""
+"""Private immutable event schema, limits, and console rendering conventions."""
 
 INTERNAL_PREFIX_STR = "nlf_"
 METADATA_MAX_DEPTH_INT = 6

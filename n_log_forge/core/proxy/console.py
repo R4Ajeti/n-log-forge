@@ -1,4 +1,4 @@
-"""Standard-library console output; streams remain owned by the application."""
+"""Private console output; streams remain owned by the application."""
 
 from __future__ import annotations
 

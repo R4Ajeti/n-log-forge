@@ -14,9 +14,9 @@ from typing import Any
 
 import pytest
 
-from core.constant import sentry_constant as key
-from core.helper.event import Event, make_event
-from core.proxy.sentry import SentryProvider, _sentry_level
+from n_log_forge.core.constant import sentry_constant as key
+from n_log_forge.core.helper.event import Event, make_event
+from n_log_forge.core.proxy.sentry import SentryProvider, _sentry_level
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _RAW_EXAMPLE = _PROJECT_ROOT / "raw" / "proxy" / "sentry"
@@ -90,7 +90,7 @@ def blocked_import(name, *args, **kwargs):
     return real_import(name, *args, **kwargs)
 
 builtins.__import__ = blocked_import
-from core.proxy.sentry import SentryProvider
+from n_log_forge.core.proxy.sentry import SentryProvider
 print("module imported")
 try:
     SentryProvider("https://public-key@example.invalid/123")

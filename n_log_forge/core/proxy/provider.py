@@ -1,10 +1,10 @@
-"""Internal delivery contract, independent of any remote SDK."""
+"""Private delivery contract, independent of any remote SDK."""
 
 from __future__ import annotations
 
 from typing import Protocol
 
-from core.helper.event import Event
+from ..helper.event import Event
 
 
 class Provider(Protocol):

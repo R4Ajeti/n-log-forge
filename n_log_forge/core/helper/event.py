@@ -1,4 +1,4 @@
-"""Producer-side immutable event snapshots, without retaining traceback frames."""
+"""Private producer-side event snapshots without retained traceback frames."""
 
 from __future__ import annotations
 

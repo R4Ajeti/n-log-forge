@@ -1,4 +1,4 @@
-"""Process-local composition root and cooperative logging ownership.
+"""Private process-local composition root and cooperative logging ownership.
 
 Lock order: transition lock, then state lock, then logging's registry lock.
 Emission takes only the state lock to lease a snapshot. Neither lock is held

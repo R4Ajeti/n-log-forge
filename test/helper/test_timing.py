@@ -4,7 +4,7 @@ import threading
 
 import pytest
 
-from core.helper import timing
+from n_log_forge.core.helper import timing
 
 
 @pytest.fixture

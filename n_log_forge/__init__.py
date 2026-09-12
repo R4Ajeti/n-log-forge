@@ -8,10 +8,10 @@ eligibility check/call or by an explicit :func:`configure` call.
 
 from __future__ import annotations
 
-from core.constant import configuration_constant as _configuration
-from core.constant import runtime_constant as _runtime_constant
-from core.service import runtime as _runtime
-from core.service.facade import getLogger, logger
+from .core.constant import configuration_constant as _configuration
+from .core.constant import runtime_constant as _runtime_constant
+from .core.service import runtime as _runtime
+from .core.service.facade import getLogger, logger
 
 __all__ = (
     "configure",
@@ -95,3 +95,4 @@ def shutdown(timeout: float = _runtime_constant.DEFAULT_TIMEOUT_SECONDS_FLOAT) -
 # Python 3.14 exposes the future-feature marker as a module global. Keep the
 # documented public namespace limited to the seven names in ``__all__``.
 del annotations
+globals().pop("core", None)

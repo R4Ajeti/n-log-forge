@@ -11,10 +11,13 @@ from typing import Any
 import pytest
 
 import n_log_forge
-from core.constant.configuration_constant import ENVIRONMENT_KEYS_MAPPING, PACKAGE_RULES_KEY_STR
-from core.helper.event import Event, thaw
-from core.service import facade as facade_module
-from core.service import runtime as runtime_module
+from n_log_forge.core.constant.configuration_constant import (
+    ENVIRONMENT_KEYS_MAPPING,
+    PACKAGE_RULES_KEY_STR,
+)
+from n_log_forge.core.helper.event import Event, thaw
+from n_log_forge.core.service import facade as facade_module
+from n_log_forge.core.service import runtime as runtime_module
 
 
 class FacadeProvider:

@@ -3,8 +3,8 @@ import logging
 from dataclasses import replace
 from datetime import UTC, datetime
 
-from core.helper.event import make_event
-from core.proxy.console import ConsoleProvider
+from n_log_forge.core.helper.event import make_event
+from n_log_forge.core.proxy.console import ConsoleProvider
 
 
 def event(**metadata):

@@ -1,4 +1,4 @@
-"""Caller attribution and bounded display-name transformation."""
+"""Private caller attribution and bounded display-name transformation."""
 
 from __future__ import annotations
 

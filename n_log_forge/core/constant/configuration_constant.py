@@ -1,4 +1,4 @@
-"""Immutable names and defaults belonging to the configuration contract."""
+"""Private immutable names and defaults for the configuration contract."""
 
 from __future__ import annotations
 

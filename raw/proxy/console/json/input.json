@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-09-09T20:35:42.182Z",
+  "level": 20,
+  "level_name": "INFO",
+  "source": "example.worker",
+  "package_name": "Example",
+  "message": "Processed 12 items",
+  "metadata": {
+    "itemCount": 12
+  },
+  "pathname": "/example/worker.py",
+  "lineno": 12,
+  "function": "process",
+  "exception": null,
+  "exception_text": null,
+  "stack_info": null,
+  "operation": "batch",
+  "elapsed_ns": 842000000,
+  "duration": "0.9s"
+}

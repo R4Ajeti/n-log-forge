@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "n-log-forge"
-version = "1.0.0"
+version = "1.0.1"
 description = "Cooperative structured Python logging with operation timing and optional isolated Sentry delivery"
 authors = [
     { name = "r!n0", email = "r4ajeti@gmail.com" }
@@ -33,12 +33,11 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["n_log_forge", "core"]
+packages = ["n_log_forge"]
 
 [tool.hatch.build.targets.sdist]
 include = [
   "/n_log_forge",
-  "/core",
   "/test",
   "/example",
   "/raw",
@@ -61,5 +60,5 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.mypy]
 python_version = "3.14"
-files = ["n_log_forge", "core"]
+files = ["n_log_forge"]
 strict = true

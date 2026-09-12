@@ -1,4 +1,4 @@
-"""Pure normalization shared by configuration entry points.
+"""Private pure normalization shared by configuration entry points.
 
 Primitive parsers deliberately reject ``None`` and blank strings. Environment
 absence and programmatic reset operations belong to the configuration service.
@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from urllib.parse import urlsplit
 
-from core.constant import configuration_constant as constants
+from ..constant import configuration_constant as constants
 
 
 def _decimal_integer(value: object) -> int | None:

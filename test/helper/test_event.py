@@ -5,12 +5,12 @@ from types import TracebackType
 
 import pytest
 
-from core.constant.event_constant import (
+from n_log_forge.core.constant.event_constant import (
     METADATA_MAX_ITEMS_INT,
     METADATA_MAX_STRING_LENGTH_INT,
 )
-from core.helper import timing
-from core.helper.event import make_event, snapshot, thaw, validate_metadata
+from n_log_forge.core.helper import timing
+from n_log_forge.core.helper.event import make_event, snapshot, thaw, validate_metadata
 
 
 def record(message="Message", args=(), exc_info=None, **metadata):

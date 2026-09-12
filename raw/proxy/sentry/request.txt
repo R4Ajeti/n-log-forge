@@ -1,0 +1,2 @@
+Illustrative Sentry envelope delivery using the example.invalid DSN above.
+No live request was made; tests substitute an in-memory client.

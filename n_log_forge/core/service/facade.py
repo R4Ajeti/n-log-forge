@@ -1,4 +1,4 @@
-"""Typed user-facing logger without replacing standard-library logging objects."""
+"""Private typed facade over standard-library logging objects."""
 
 from __future__ import annotations
 
